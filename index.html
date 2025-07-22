@@ -149,8 +149,8 @@
                 });
             }
 
-            // Ping every 10 minutes (600,000 milliseconds)
-            setInterval(keepBackendAwake, 600000);
+            // Ping every 1 minutes (60,000 milliseconds)
+            setInterval(keepBackendAwake, 60000);
 
             // Initial ping after 30 seconds
             setTimeout(keepBackendAwake, 30000)
