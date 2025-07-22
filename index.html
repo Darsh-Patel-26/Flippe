@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flippe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        .card {
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            aspect-ratio: 1;
+        }
+
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card-front,
+        .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 0.5rem;
+        }
+
+        .card-back {
+            transform: rotateY(180deg);
+        }
+
+        .matched {
+            animation: pulse 1s ease-in-out;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        /* Custom responsive breakpoints */
+        @media (max-width: 480px) {
+            .card {
+                min-height: 70px;
+            }
+        }
+
+        @media (min-width: 481px) and (max-width: 768px) {
+            .card {
+                min-height: 85px;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .card {
+                min-height: 100px;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 min-h-screen">
+    <div class="container mx-auto p-6 px-4 py-6 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="text-center mb-8 sm:mb-8 lg:mb-10">
+            <h1 class="text-4xl font-bold text-white mb-4 m:mb-6 tracking-tight">Flippe</h1>
+            <!-- Stats Panel - Responsive Layout -->
+            <div class="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-6 lg:gap-8 mb-4 sm:mb-6">
+                <div
+                    class="bg-white bg-opacity-20 backdrop-blur-sm rounded-xl px-4 py-3 sm:px-6 sm:py-3 shadow-lg border border-white border-opacity-20">
+                    <span class="text-white font-semibold text-sm sm:text-base">Moves: </span>
+                    <span id="moves" class="text-yellow-300 font-bold text-lg sm:text-xl">0</span>
+                </div>
+                <div
+                    class="bg-white bg-opacity-20 backdrop-blur-sm rounded-xl px-4 py-3 sm:px-6 sm:py-3 shadow-lg border border-white border-opacity-20">
+                    <span class="text-white font-semibold text-sm sm:text-base">Matches: </span>
+                    <span id="matches" class="text-green-300 font-bold text-lg sm:text-xl">0</span>
+                </div>
+                <div
+                    class="bg-white bg-opacity-20 backdrop-blur-sm rounded-xl px-4 py-3 sm:px-6 sm:py-3 shadow-lg border border-white border-opacity-20">
+                    <span class="text-white font-semibold text-sm sm:text-base">Time: </span>
+                    <span id="timer" class="text-blue-300 font-bold text-lg sm:text-xl">0:00</span>
+                </div>
+            </div>
+
+            <!-- Reset Button -->
+            <button id="resetBtn"
+                class="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-bold py-3 px-6 sm:py-3 sm:px-8 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95">
+                Reset Game
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Board -->
+    <div class="flex justify-center mb-8">
+        <div id="gameBoard" class="grid grid-cols-4 gap-2 sm:gap-3 lg:gap-4 w-full max-w-xs sm:max-w-md lg:max-w-2xl">
+            <!-- Cards will be generated here -->
+        </div>
+    </div>
+
+    <!-- Win Modal -->
+    <div id="winModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-lg p-8 text-center max-w-md">
+            <div class="text-6xl mb-4">🎉</div>
+            <h2 class="text-3xl font-bold text-gray-800 mb-4">Congratulations!</h2>
+            <p class="text-gray-600 mb-2">You completed the game in:</p>
+            <p class="text-2xl font-bold text-blue-600 mb-2"><span id="finalMoves"></span> moves</p>
+            <p class="text-2xl font-bold text-green-600 mb-6"><span id="finalTime"></span></p>
+            <button id="playAgainBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg">
+                Play Again
+            </button>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            // Game variables
+            let cards = ['🎮', '🎯', '🏆', '⭐', '🎲', '🃏', '🎪', '🎨'];
+            let gameCards = [...cards, ...cards]; // Duplicate for pairs
+            let flippedCards = [];
+            let matchedPairs = 0;
+            let moves = 0;
+            let gameStarted = false;
+            let startTime;
+            let timerInterval;
+
+            // Keep-alive ping for Render backend
+            function keepBackendAwake() {
+                $.ajax({
+                    url: 'https://spendaid.onrender.com/',
+                    type: 'GET',
+                    timeout: 10000,
+                    success: function () {
+                        console.log('Backend pinged successfully');
+                    },
+                    error: function () {
+                        console.log('Backend ping failed (this is normal)');
+                    }
+                });
+            }
+
+            // Ping every 10 minutes (600,000 milliseconds)
+            setInterval(keepBackendAwake, 600000);
+
+            // Initial ping after 30 seconds
+            setTimeout(keepBackendAwake, 30000)
+
+            // Initialize game
+            function initGame() {
+                shuffleCards();
+                createBoard();
+                resetStats();
+            }
+
+            // Shuffle cards array
+            function shuffleCards() {
+                for (let i = gameCards.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [gameCards[i], gameCards[j]] = [gameCards[j], gameCards[i]];
+                }
+            }
+
+            // Create game board
+            function createBoard() {
+                $('#gameBoard').empty();
+                gameCards.forEach((symbol, index) => {
+                    const cardHtml = `
+                        <div class="card relative w-13 h-20 cursor-pointer" data-symbol="${symbol}" data-index="${index}">
+                            <div class="card-front bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center shadow-lg hover:shadow-xl border-2 border-white border-opacity-20">
+                                <span class="text-xl sm:text-2xl lg:text-3xl text-white font-bold">?</span>
+                            </div>
+                            <div class="card-back bg-white flex items-center justify-center shadow-lg">
+                                <span class="text-3xl">${symbol}</span>
+                            </div>
+                        </div>
+                    `;
+                    $('#gameBoard').append(cardHtml);
+                });
+            }
+
+            // Start timer
+            function startTimer() {
+                startTime = new Date().getTime();
+                timerInterval = setInterval(updateTimer, 1000);
+            }
+
+            // Update timer display
+            function updateTimer() {
+                const now = new Date().getTime();
+                const elapsed = Math.floor((now - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                $('#timer').text(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+            }
+
+            // Reset game statistics
+            function resetStats() {
+                moves = 0;
+                matchedPairs = 0;
+                gameStarted = false;
+                flippedCards = [];
+                $('#moves').text(moves);
+                $('#matches').text(matchedPairs);
+                $('#timer').text('0:00');
+                clearInterval(timerInterval);
+            }
+
+            // Handle card click
+            $(document).on('click', '.card', function () {
+                if (!gameStarted) {
+                    startTimer();
+                    gameStarted = true;
+                }
+
+                const $card = $(this);
+
+                // Ignore if card is already flipped or matched
+                if ($card.hasClass('flipped') || flippedCards.length >= 2) {
+                    return;
+                }
+
+                // Flip card
+                $card.addClass('flipped');
+                flippedCards.push($card);
+
+                // Check for match when 2 cards are flipped
+                if (flippedCards.length === 2) {
+                    moves++;
+                    $('#moves').text(moves);
+
+                    setTimeout(checkMatch, 800);
+                }
+            });
+
+            // Check if flipped cards match
+            function checkMatch() {
+                const [card1, card2] = flippedCards;
+                const symbol1 = card1.data('symbol');
+                const symbol2 = card2.data('symbol');
+
+                if (symbol1 === symbol2) {
+                    // Match found
+                    card1.addClass('matched');
+                    card2.addClass('matched');
+                    matchedPairs++;
+                    $('#matches').text(matchedPairs);
+
+                    // Check if game is won
+                    if (matchedPairs === cards.length) {
+                        setTimeout(showWinModal, 500);
+                    }
+                } else {
+                    // No match, flip cards back
+                    card1.removeClass('flipped');
+                    card2.removeClass('flipped');
+                }
+
+                flippedCards = [];
+            }
+
+            // Show win modal
+            function showWinModal() {
+                clearInterval(timerInterval);
+                $('#finalMoves').text(moves);
+                $('#finalTime').text($('#timer').text());
+                $('#winModal').removeClass('hidden');
+            }
+
+            // Reset game
+            $('#resetBtn, #playAgainBtn').click(function () {
+                $('#winModal').addClass('hidden');
+                initGame();
+            });
+
+            // Start the game
+            initGame();
+        });
+    </script>
+</body>
+
+</html>
